@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareClinic Login Portal</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #4f46e5;
+      --primary-dark: #312e81;
+      --secondary: #5864c7;
+      --accent: #22c55e;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --bg-soft: #f8fafc;
+      --white: #ffffff;
+      --danger: #dc2626;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+      --radius-xl: 28px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(rgba(36, 56, 184, 0.45), rgba(36, 56, 184, 0.38)),
+        url('https://images.unsplash.com/photo-1584982751601-97dcc096659c?auto=format&fit=crop&w=1600&q=80') center/cover no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 26px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1180px;
+      min-height: 690px;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      background: rgba(255,255,255,0.13);
+      border: 1px solid rgba(255,255,255,0.18);
+      backdrop-filter: blur(10px);
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .showcase {
+      position: relative;
+      padding: 36px 42px 40px;
+      color: #fff;
+      background: linear-gradient(145deg, rgba(63,94,251,0.30), rgba(88,100,199,0.18));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+
+    .brand-text strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .brand-text span {
+      font-size: 13px;
+      color: rgba(255,255,255,0.88);
+      letter-spacing: 0.3px;
+    }
+
+    .role-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .role-chip {
+      border: 1px solid rgba(255,255,255,0.28);
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .hero-copy {
+      margin-top: 30px;
+      padding-top: 18px;
+    }
+
+    .hero-copy h1 {
+      margin: 0 0 16px;
+      font-size: 56px;
+      line-height: 1.04;
+      font-weight: 700;
+      max-width: 560px;
+    }
+
+    .hero-copy p {
+      margin: 0;
+      max-width: 540px;
+      font-size: 17px;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .feature-grid {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      max-width: 560px;
+    }
+
+    .feature-card {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 18px;
+      padding: 16px 16px 14px;
+    }
+
+    .feature-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .feature-card strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .feature-card span {
+      font-size: 13px;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.88);
+    }
+
+    .welcome-strip {
+      margin-top: 28px;
+      background: rgba(255,255,255,0.13);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 18px 20px;
+      max-width: 560px;
+    }
+
+    .welcome-strip strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 15px;
+    }
+
+    .welcome-strip p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .panel {
+      background: #ffffff;
+      padding: 42px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 405px;
+    }
+
+    .login-card h2 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      color: #111827;
+    }
+
+    .login-card .subtext {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .role-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .role-option {
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      color: #374151;
+      border-radius: 14px;
+      padding: 12px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      transition: 0.2s ease;
+      user-select: none;
+    }
+
+    .role-option.active {
+      background: #eef2ff;
+      border-color: #4f46e5;
+      color: #312e81;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.10);
+    }
+
+    .form-group {
+      margin-bottom: 17px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f9fafb;
+      padding: 0 16px 0 48px;
+      font-size: 14px;
+      outline: none;
+      transition: 0.2s ease;
+    }
+
+    .input-wrap input:focus {
+      background: #fff;
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 4px rgba(79,70,229,0.10);
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #6b7280;
+      font-size: 16px;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      background: transparent;
+      color: #6b7280;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .helper-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0 18px;
+      flex-wrap: wrap;
+    }
+
+    .remember-me {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #4b5563;
+      font-size: 13px;
+    }
+
+    .forgot-link {
+      color: #4f46e5;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
+
+    .message-box {
+      display: none;
+      margin-bottom: 16px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .message-box.error {
+      display: block;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .message-box.info {
+      display: block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+
+    .login-btn {
+      width: 100%;
+      height: 54px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #3f5efb, #5864c7);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 14px 28px rgba(63,94,251,0.22);
+      transition: 0.2s ease;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .secondary-links {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .secondary-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #374151;
+      border-radius: 14px;
+      height: 46px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .secondary-btn:hover {
+      background: #f8fafc;
+    }
+
+    .demo-card {
+      margin-top: 20px;
+      background: #f8fbff;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      padding: 15px 16px;
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.7;
+    }
+
+    .demo-card strong {
+      color: #1e3a8a;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .showcase {
+        padding: 32px 28px 34px;
+      }
+
+      .hero-copy h1 {
+        font-size: 42px;
+      }
+
+      .panel {
+        padding: 34px 22px 36px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 14px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .role-selector,
+      .secondary-links {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-copy h1 {
+        font-size: 34px;
+      }
+
+      .brand-text strong {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="showcase">
+      <div>
+        <div class="topbar">
+          <div class="brand">
+            <img src="CareClinicLogo.jpeg" alt="CareClinic" class="logo" />
+            <div class="brand-text">
+              <strong>CareClinic</strong>
+              <span>Management System</span>
+            </div>
+          </div>
+
+          
+        </div>
+
+        <div class="hero-copy">
+          <h1>One secure portal for your clinic system.</h1>
+          
+        </div>
+
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🩺</div>
+            <strong>Doctor Access</strong>
+            <span>Doctors can securely log in to view their schedule availability and assigned slots.</span>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🛠</div>
+            <strong>Admin Access</strong>
+            <span>Admins are represented in the system interface to make the portal feel complete and realistic.</span>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">📅</div>
+            <strong>Patient Access</strong>
+            <span>Patients can be included in the future for appointments and booking functions.</span>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <strong>Secure Sign In</strong>
+            <span>Built with a professional layout ready to be connected to PHP and MySQL authentication.</span>
+          </div>
+        </div>
+      </div>
+
+      
+    </section>
+
+    <section class="panel">
+      <div class="login-card">
+        <h2>Sign In</h2>
+        <p class="subtext">
+          Select your role and enter your account credentials to access the system.
+        </p>
+
+        <div class="role-selector">
+          <div class="role-option" id="adminRoleBtn">Admin</div>
+          <div class="role-option active" id="doctorRoleBtn">Doctor</div>
+          <div class="role-option" id="patientRoleBtn">Patient</div>
+        </div>
+
+        <form id="loginForm" action="doctor_login.php" method="POST">
+          <input type="hidden" name="role" id="selectedRole" value="doctor" />
+
+          <div class="message-box" id="messageBox"></div>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <div class="input-wrap">
+              <span class="input-icon">👤</span>
+              <input type="text" id="username" name="username" placeholder="Enter your username" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <span class="input-icon">🔑</span>
+              <input type="password" id="password" name="password" placeholder="Enter your password" required />
+              <button type="button" class="toggle-password" onclick="togglePassword()">Show</button>
+            </div>
+          </div>
+
+          <div class="helper-row">
+            <label class="remember-me">
+              <input type="checkbox" />
+              <span>Remember me</span>
+            </label>
+            <a href="#" class="forgot-link" onclick="showForgotMessage(event)">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="login-btn" id="loginBtn">Login to System</button>
+        </form>
+
+        <div class="footer-note">
+          CareClinic Management System • Unified Login Portal
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const adminRoleBtn = document.getElementById('adminRoleBtn');
+    const doctorRoleBtn = document.getElementById('doctorRoleBtn');
+    const patientRoleBtn = document.getElementById('patientRoleBtn');
+    const selectedRole = document.getElementById('selectedRole');
+    const messageBox = document.getElementById('messageBox');
+    const loginForm = document.getElementById('loginForm');
+
+    function clearRoleActive() {
+      adminRoleBtn.classList.remove('active');
+      doctorRoleBtn.classList.remove('active');
+      patientRoleBtn.classList.remove('active');
+    }
+
+    function setMessage(type, text) {
+      messageBox.className = 'message-box ' + type;
+      messageBox.textContent = text;
+    }
+
+    adminRoleBtn.addEventListener('click', () => {
+      clearRoleActive();
+      adminRoleBtn.classList.add('active');
+      selectedRole.value = 'admin';
+      loginForm.action = 'admin_login.php';
+    });
+
+    doctorRoleBtn.addEventListener('click', () => {
+      clearRoleActive();
+      doctorRoleBtn.classList.add('active');
+      selectedRole.value = 'doctor';
+      loginForm.action = 'doctor_login.php';
+    });
+
+    patientRoleBtn.addEventListener('click', () => {
+      clearRoleActive();
+      patientRoleBtn.classList.add('active');
+      selectedRole.value = 'patient';
+      loginForm.action = '#';
+    });
+
+    function togglePassword() {
+      const passwordInput = document.getElementById('password');
+      const toggleBtn = document.querySelector('.toggle-password');
+
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleBtn.textContent = 'Hide';
+      } else {
+        passwordInput.type = 'password';
+        toggleBtn.textContent = 'Show';
+      }
+    }
+
+    function showForgotMessage(event) {
+      event.preventDefault();
+      setMessage('info', 'Forgot password function is not connected yet. For testing, use the Doctor account credentials from your database.');
+    }
+
+    function showDisplayOnlyMessage(roleName) {
+      setMessage('info', roleName + ' interface is included for complete system presentation only and is not active yet.');
+    }
+
+    loginForm.addEventListener('submit', function(event) {
+      if (selectedRole.value === 'patient') {
+        event.preventDefault();
+        setMessage('error', 'Patient login is not active right now.');
+      }
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const errorMessage = params.get('error');
+
+    if (errorMessage) {
+      setMessage('error', errorMessage);
+    }
+  </script>
+</body>
+</html>
