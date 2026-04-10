@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" role="img" aria-labelledby="title desc">
+  <title id="title">CareClinic logo</title>
+  <desc id="desc">A stylized medical cross above the CareClinic wordmark.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="10">
+    <rect x="77" y="16" width="36" height="72" rx="18" stroke="#9ADAF2"/>
+    <rect x="45" y="48" width="72" height="36" rx="18" stroke="#9ADAF2"/>
+    <rect x="109" y="16" width="36" height="72" rx="18" stroke="#0B5FA8"/>
+    <rect x="93" y="32" width="72" height="36" rx="18" stroke="#0B5FA8"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif" font-weight="700">
+    <text x="73" y="113" fill="#9ADAF2" font-size="26">Care</text>
+    <text x="116" y="113" fill="#00A3EB" font-size="34">Clinic</text>
+  </g>
+</svg>
