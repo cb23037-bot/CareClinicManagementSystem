@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-define('GOOGLE_CONFIG_FILE', __DIR__ . '/google_oauth_config.php');
 define('MYSQL_CONFIG_FILE', __DIR__ . '/mysql_config.php');
 
 function mysql_app_config()
@@ -74,6 +73,90 @@ function database_connection()
     return $connection;
 }
 
+function schema_table_exists(mysqli $db, $tableName)
+{
+    $statement = $db->prepare(
+        "SELECT 1
+         FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = ?
+           AND TABLE_NAME = ?
+         LIMIT 1"
+    );
+
+    $databaseName = mysql_database_name();
+    $statement->bind_param('ss', $databaseName, $tableName);
+    $statement->execute();
+    $statement->store_result();
+    $exists = $statement->num_rows > 0;
+    $statement->close();
+
+    return $exists;
+}
+
+function schema_column_exists(mysqli $db, $tableName, $columnName)
+{
+    $statement = $db->prepare(
+        "SELECT 1
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = ?
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1"
+    );
+
+    $databaseName = mysql_database_name();
+    $statement->bind_param('sss', $databaseName, $tableName, $columnName);
+    $statement->execute();
+    $statement->store_result();
+    $exists = $statement->num_rows > 0;
+    $statement->close();
+
+    return $exists;
+}
+
+function schema_index_exists(mysqli $db, $tableName, $indexName)
+{
+    $statement = $db->prepare(
+        "SELECT 1
+         FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = ?
+           AND TABLE_NAME = ?
+           AND INDEX_NAME = ?
+         LIMIT 1"
+    );
+
+    $databaseName = mysql_database_name();
+    $statement->bind_param('sss', $databaseName, $tableName, $indexName);
+    $statement->execute();
+    $statement->store_result();
+    $exists = $statement->num_rows > 0;
+    $statement->close();
+
+    return $exists;
+}
+
+function schema_foreign_key_exists(mysqli $db, $tableName, $constraintName)
+{
+    $statement = $db->prepare(
+        "SELECT 1
+         FROM information_schema.TABLE_CONSTRAINTS
+         WHERE TABLE_SCHEMA = ?
+           AND TABLE_NAME = ?
+           AND CONSTRAINT_NAME = ?
+           AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+         LIMIT 1"
+    );
+
+    $databaseName = mysql_database_name();
+    $statement->bind_param('sss', $databaseName, $tableName, $constraintName);
+    $statement->execute();
+    $statement->store_result();
+    $exists = $statement->num_rows > 0;
+    $statement->close();
+
+    return $exists;
+}
+
 function ensure_database_schema(mysqli $db)
 {
     $db->query(
@@ -94,6 +177,171 @@ function ensure_database_schema(mysqli $db)
             UNIQUE KEY uniq_users_google_sub (google_sub)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    $db->query(
+        "CREATE TABLE IF NOT EXISTS admin_profiles (
+            user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_admin_profiles_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $db->query(
+        "CREATE TABLE IF NOT EXISTS patient_profiles (
+            user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+            patient_code VARCHAR(20) NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_patient_profiles_code (patient_code),
+            CONSTRAINT fk_patient_profiles_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $db->query(
+        "CREATE TABLE IF NOT EXISTS doctor_profiles (
+            user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+            specialization VARCHAR(120) NOT NULL DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_doctor_profiles_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $db->query(
+        "CREATE TABLE IF NOT EXISTS doctors (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NULL,
+            name VARCHAR(120) NOT NULL,
+            specialization VARCHAR(120) NOT NULL DEFAULT '',
+            email VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_doctors_email (email),
+            UNIQUE KEY uniq_doctors_user_id (user_id),
+            CONSTRAINT fk_doctors_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE SET NULL ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    if (schema_table_exists($db, 'doctors') && !schema_column_exists($db, 'doctors', 'user_id')) {
+        $db->query("ALTER TABLE doctors ADD COLUMN user_id INT UNSIGNED NULL AFTER id");
+    }
+
+    if (schema_table_exists($db, 'doctors')) {
+        $db->query(
+            "UPDATE doctors d
+             LEFT JOIN users u ON u.id = d.user_id
+             SET d.user_id = NULL
+             WHERE d.user_id IS NOT NULL
+               AND u.id IS NULL"
+        );
+    }
+
+    if (schema_table_exists($db, 'doctors') && !schema_index_exists($db, 'doctors', 'uniq_doctors_user_id')) {
+        $db->query("ALTER TABLE doctors ADD UNIQUE KEY uniq_doctors_user_id (user_id)");
+    }
+
+    if (schema_table_exists($db, 'doctors') && !schema_foreign_key_exists($db, 'doctors', 'fk_doctors_user')) {
+        $db->query(
+            "ALTER TABLE doctors
+             ADD CONSTRAINT fk_doctors_user
+             FOREIGN KEY (user_id) REFERENCES users(id)
+             ON DELETE SET NULL ON UPDATE CASCADE"
+        );
+    }
+
+    $db->query("INSERT IGNORE INTO admin_profiles (user_id) SELECT id FROM users WHERE role = 'admin'");
+    $db->query("INSERT IGNORE INTO patient_profiles (user_id) SELECT id FROM users WHERE role = 'patient'");
+    $db->query("INSERT IGNORE INTO doctor_profiles (user_id, specialization) SELECT id, '' FROM users WHERE role = 'doctor'");
+
+    if (
+        schema_table_exists($db, 'doctors')
+        && schema_column_exists($db, 'doctors', 'email')
+        && schema_column_exists($db, 'doctors', 'specialization')
+        && schema_column_exists($db, 'doctors', 'user_id')
+    ) {
+        $db->query(
+            "UPDATE doctors d
+             INNER JOIN users u ON u.email = d.email AND u.role = 'doctor'
+             SET d.user_id = u.id
+             WHERE d.user_id IS NULL"
+        );
+
+        $db->query(
+            "INSERT INTO doctor_profiles (user_id, specialization)
+             SELECT u.id, d.specialization
+             FROM doctors d
+             INNER JOIN users u ON u.email = d.email AND u.role = 'doctor'
+             ON DUPLICATE KEY UPDATE specialization = VALUES(specialization)"
+        );
+    }
+}
+
+function ensure_role_profile_for_user(mysqli $db, $userId, $role, array $attributes = [])
+{
+    $userId = (int) $userId;
+    if ($userId <= 0) {
+        return;
+    }
+
+    if ($role === 'admin') {
+        $statement = $db->prepare('INSERT IGNORE INTO admin_profiles (user_id) VALUES (?)');
+        $statement->bind_param('i', $userId);
+        $statement->execute();
+        $statement->close();
+        return;
+    }
+
+    if ($role === 'doctor') {
+        $specialization = trim((string) ($attributes['specialization'] ?? ''));
+        $statement = $db->prepare(
+            "INSERT INTO doctor_profiles (user_id, specialization)
+             VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE
+                specialization = CASE
+                    WHEN VALUES(specialization) = '' THEN specialization
+                    ELSE VALUES(specialization)
+                END"
+        );
+        $statement->bind_param('is', $userId, $specialization);
+        $statement->execute();
+        $statement->close();
+        return;
+    }
+
+    $statement = $db->prepare('INSERT IGNORE INTO patient_profiles (user_id) VALUES (?)');
+    $statement->bind_param('i', $userId);
+    $statement->execute();
+    $statement->close();
+}
+
+function remove_role_profile_for_user(mysqli $db, $userId, $role)
+{
+    $tableName = '';
+    if ($role === 'admin') {
+        $tableName = 'admin_profiles';
+    } elseif ($role === 'doctor') {
+        $tableName = 'doctor_profiles';
+    } elseif ($role === 'patient') {
+        $tableName = 'patient_profiles';
+    }
+
+    if ($tableName === '') {
+        return;
+    }
+
+    $statement = $db->prepare("DELETE FROM {$tableName} WHERE user_id = ?");
+    $statement->bind_param('i', $userId);
+    $statement->execute();
+    $statement->close();
 }
 
 function normalize_user_row(array $row)
@@ -204,6 +452,7 @@ function create_user(array $attributes)
     $statement->execute();
     $newId = (int) $db->insert_id;
     $statement->close();
+    ensure_role_profile_for_user($db, $newId, $role, $attributes);
 
     return find_user_by_id($newId);
 }
@@ -212,6 +461,7 @@ function update_user(array $updatedUser)
 {
     $db = database_connection();
     $id = (int) ($updatedUser['id'] ?? 0);
+    $existingUser = $id > 0 ? find_user_by_id($id) : null;
     $role = (string) ($updatedUser['role'] ?? 'patient');
     $name = (string) ($updatedUser['name'] ?? '');
     $email = (string) ($updatedUser['email'] ?? '');
@@ -246,6 +496,14 @@ function update_user(array $updatedUser)
     $updated = $statement->affected_rows >= 0;
     $statement->close();
 
+    if ($updated && $id > 0) {
+        if ($existingUser && ($existingUser['role'] ?? '') !== $role) {
+            remove_role_profile_for_user($db, $id, $existingUser['role']);
+        }
+
+        ensure_role_profile_for_user($db, $id, $role, $updatedUser);
+    }
+
     return $updated;
 }
 
@@ -259,151 +517,6 @@ function delete_user_by_id($id)
     $statement->close();
 
     return $deleted;
-}
-
-function google_oauth_config()
-{
-    static $config = null;
-
-    if ($config !== null) {
-        return $config;
-    }
-
-    $config = ['client_id' => ''];
-
-    if (file_exists(GOOGLE_CONFIG_FILE)) {
-        $loaded = require GOOGLE_CONFIG_FILE;
-        if (is_array($loaded)) {
-            $config = array_merge($config, $loaded);
-        }
-    }
-
-    $config['client_id'] = trim((string) ($config['client_id'] ?? ''));
-    return $config;
-}
-
-function google_client_id()
-{
-    $config = google_oauth_config();
-    return $config['client_id'];
-}
-
-function google_sign_in_enabled()
-{
-    $clientId = google_client_id();
-    return $clientId !== '' && stripos($clientId, 'YOUR_GOOGLE_CLIENT_ID') !== 0;
-}
-
-function base64url_decode_string($value)
-{
-    $remainder = strlen($value) % 4;
-    if ($remainder > 0) {
-        $value .= str_repeat('=', 4 - $remainder);
-    }
-
-    return base64_decode(strtr($value, '-_', '+/'));
-}
-
-function google_fetch_public_certificates()
-{
-    static $certificates = null;
-
-    if ($certificates !== null) {
-        return $certificates;
-    }
-
-    $ch = curl_init('https://www.googleapis.com/oauth2/v1/certs');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_FOLLOWLOCATION => true,
-    ]);
-
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    curl_close($ch);
-
-    if ($response === false || $status >= 400) {
-        throw new RuntimeException('Could not contact Google to verify the sign-in token.');
-    }
-
-    $decoded = json_decode($response, true);
-    if (!is_array($decoded) || $decoded === []) {
-        throw new RuntimeException('Google returned an invalid set of signing certificates.');
-    }
-
-    $certificates = $decoded;
-    return $certificates;
-}
-
-function google_verify_id_token($idToken)
-{
-    if (!google_sign_in_enabled()) {
-        throw new RuntimeException('Google Sign-In is not configured yet.');
-    }
-
-    $parts = explode('.', $idToken);
-    if (count($parts) !== 3) {
-        throw new RuntimeException('Google returned an invalid token.');
-    }
-
-    [$encodedHeader, $encodedPayload, $encodedSignature] = $parts;
-    $header = json_decode(base64url_decode_string($encodedHeader), true);
-    $payload = json_decode(base64url_decode_string($encodedPayload), true);
-    $signature = base64url_decode_string($encodedSignature);
-
-    if (!is_array($header) || !is_array($payload) || $signature === false) {
-        throw new RuntimeException('Google returned a malformed token.');
-    }
-
-    if (($header['alg'] ?? '') !== 'RS256' || empty($header['kid'])) {
-        throw new RuntimeException('Google returned a token in an unsupported format.');
-    }
-
-    $certificates = google_fetch_public_certificates();
-    $certificate = $certificates[$header['kid']] ?? null;
-
-    if (!$certificate) {
-        throw new RuntimeException('Google signing certificate could not be matched.');
-    }
-
-    $verified = openssl_verify(
-        $encodedHeader . '.' . $encodedPayload,
-        $signature,
-        $certificate,
-        OPENSSL_ALGO_SHA256
-    );
-
-    if ($verified !== 1) {
-        throw new RuntimeException('Google sign-in verification failed.');
-    }
-
-    $audience = $payload['aud'] ?? '';
-    $issuer = $payload['iss'] ?? '';
-    $expiresAt = (int) ($payload['exp'] ?? 0);
-    $issuedAt = (int) ($payload['iat'] ?? 0);
-
-    if ($audience !== google_client_id()) {
-        throw new RuntimeException('This Google token was not issued for this app.');
-    }
-
-    if (!in_array($issuer, ['accounts.google.com', 'https://accounts.google.com'], true)) {
-        throw new RuntimeException('Google token issuer was invalid.');
-    }
-
-    if ($expiresAt < time() || ($issuedAt > 0 && $issuedAt > time() + 300)) {
-        throw new RuntimeException('Google token has expired or is not valid yet.');
-    }
-
-    $email = trim((string) ($payload['email'] ?? ''));
-    $subject = trim((string) ($payload['sub'] ?? ''));
-    $emailVerified = filter_var($payload['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
-
-    if ($email === '' || $subject === '' || !$emailVerified) {
-        throw new RuntimeException('Google did not return a verified email address.');
-    }
-
-    return $payload;
 }
 
 function current_user()
@@ -436,41 +549,6 @@ function require_role($role)
 function sanitize($value)
 {
     return htmlspecialchars(trim($value));
-}
-
-function find_or_create_google_user(array $googlePayload)
-{
-    $email = trim((string) ($googlePayload['email'] ?? ''));
-    $name = trim((string) ($googlePayload['name'] ?? ''));
-    $subject = trim((string) ($googlePayload['sub'] ?? ''));
-
-    if ($email === '' || $subject === '') {
-        throw new RuntimeException('Google account data was incomplete.');
-    }
-
-    $user = find_user_by_email($email);
-    if ($user) {
-        $user['google_sub'] = $subject;
-
-        if (($user['name'] ?? '') === '' && $name !== '') {
-            $user['name'] = $name;
-        }
-
-        update_user($user);
-        return find_user_by_id($user['id']);
-    }
-
-    return create_user([
-        'role' => 'patient',
-        'name' => $name !== '' ? $name : 'Google User',
-        'email' => $email,
-        'phone' => '',
-        'address' => '',
-        'gender' => '',
-        'dob' => '',
-        'password' => '',
-        'google_sub' => $subject,
-    ]);
 }
 
 function redirect_after_login(array $user)

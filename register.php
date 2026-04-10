@@ -2,8 +2,6 @@
 require 'functions.php';
 
 $errors = [];
-$googleSignInEnabled = google_sign_in_enabled();
-$googleClientId = google_client_id();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
     $email = sanitize($_POST['email'] ?? '');
@@ -54,9 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Registration</title>
     <link rel="stylesheet" href="assets/prototype.css">
-    <?php if ($googleSignInEnabled): ?>
-        <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <?php endif; ?>
 </head>
 <body class="auth-page register-page">
     <div class="page-background auth-background"></div>
@@ -74,25 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </ul>
                     </div>
                 <?php endif; ?>
-
-                <div
-                    class="google-button-shell<?php echo $googleSignInEnabled ? '' : ' is-disabled'; ?>"
-                    <?php if (!$googleSignInEnabled): ?>
-                        title="Add your Google Client ID in google_oauth_config.php to enable Google Sign-In."
-                    <?php endif; ?>
-                >
-                    <div class="google-button">
-                        <img src="assets/google-g.svg" alt="" aria-hidden="true">
-                        Continue with Google
-                    </div>
-                    <?php if ($googleSignInEnabled): ?>
-                        <div id="google-signin-overlay" class="google-signin-overlay" aria-hidden="true"></div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="auth-divider">
-                    <span>or signup with</span>
-                </div>
 
                 <form method="post" class="auth-form auth-form-register">
                     <label>
@@ -114,51 +90,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </section>
     </main>
-    <?php if ($googleSignInEnabled): ?>
-        <script>
-            window.addEventListener('load', function () {
-                if (!window.google || !google.accounts || !google.accounts.id) {
-                    return;
-                }
-
-                google.accounts.id.initialize({
-                    client_id: <?php echo json_encode($googleClientId); ?>,
-                    callback: function (response) {
-                        if (!response || !response.credential) {
-                            return;
-                        }
-
-                        var form = document.createElement('form');
-                        form.method = 'POST';
-                        form.action = 'google_login.php';
-
-                        var credential = document.createElement('input');
-                        credential.type = 'hidden';
-                        credential.name = 'credential';
-                        credential.value = response.credential;
-                        form.appendChild(credential);
-
-                        document.body.appendChild(form);
-                        form.submit();
-                    },
-                    auto_select: false,
-                    cancel_on_tap_outside: true,
-                    ux_mode: 'popup'
-                });
-
-                google.accounts.id.renderButton(
-                    document.getElementById('google-signin-overlay'),
-                    {
-                        type: 'standard',
-                        theme: 'outline',
-                        size: 'large',
-                        text: 'continue_with',
-                        shape: 'pill',
-                        width: 260
-                    }
-                );
-            });
-        </script>
-    <?php endif; ?>
 </body>
 </html>

@@ -16,10 +16,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user['phone'] = sanitize($_POST['phone'] ?? $user['phone']);
     $user['address'] = sanitize($_POST['address'] ?? $user['address']);
     $user['gender'] = sanitize($_POST['gender'] ?? $user['gender']);
-    $user['dob'] = sanitize($_POST['dob'] ?? $user['dob']);
+    $submittedDob = trim((string) ($_POST['dob'] ?? $user['dob']));
+    $user['dob'] = $submittedDob;
 
     if ($user['name'] === '') {
         $errors[] = 'Name cannot be empty.';
+    }
+
+    if ($user['dob'] !== '') {
+        $dobDate = DateTime::createFromFormat('Y-m-d', $user['dob']);
+        if (!$dobDate || $dobDate->format('Y-m-d') !== $user['dob']) {
+            $errors[] = 'Date of Birth must be a valid date.';
+        }
     }
 
     if (empty($errors)) {
@@ -124,6 +132,11 @@ $roleLabel = ucfirst($currentRole);
                     <label>
                         <span>Phone Number</span>
                         <input type="text" name="phone" value="<?php echo htmlspecialchars($user['phone']); ?>">
+                    </label>
+
+                    <label>
+                        <span>Date of Birth</span>
+                        <input type="date" name="dob" value="<?php echo htmlspecialchars($user['dob']); ?>" max="<?php echo date('Y-m-d'); ?>">
                     </label>
 
                     <label class="profile-address-field">
