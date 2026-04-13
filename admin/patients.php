@@ -92,10 +92,10 @@ $patients = $pdo->query("
             </div>
             <div class="menu">
                 <a href="dashboard.php">Dashboard</a>
-                <a href="patients.php" class="active">Patients</a>
-                <a href="doctors.php">Doctors</a>
+                <a href="patients.php" class="active">Patient Directory</a>
                 <a href="appointments.php">Appointments</a>
-                <a href="records.php">Records</a>
+                <a href="doctors.php">Doctor Rosters</a>
+                <a href="records.php">Medical Records</a>
             </div>
             <button class="logout-btn" onclick="window.location.href='../logout.php'">Logout</button>
         </nav>
