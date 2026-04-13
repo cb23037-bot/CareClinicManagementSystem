@@ -16,7 +16,7 @@ $patient = $stmt->fetch();
 // Get record details
 $stmt = $pdo->prepare("
     SELECT mr.*, 
-           d.full_name as doctor_name, doc.specialization, doc.qualification,
+           d.full_name as doctor_name, doc.specialization,
            p.full_name as patient_name, pat.patient_id, pat.blood_group, 
            pat.height, pat.weight, pat.allergies, pat.chronic_conditions,
            pat.emergency_contact_name, pat.emergency_contact_phone, pat.emergency_contact_relationship
