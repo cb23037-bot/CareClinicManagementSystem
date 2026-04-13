@@ -235,9 +235,10 @@ function getStatusText($status) {
             </div>
 
             <div class="menu">
-                <a href="dashboard.php">Dashboard</a>
-                <a href="records.php" class="active">My Records</a>
+                <a href="dashboard.php">Home</a>
                 <a href="book-appointment.php">Book Appointment</a>
+                <a href="index.php">My Appointment</a>
+                <a href="records.php" class="active">My Medical Records</a>
                 <a href="profile.php">Profile</a>
             </div>
 
