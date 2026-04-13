@@ -1,35 +1,31 @@
 <?php
 require_once '../config/database.php';
 redirectIfNotLoggedIn();
-if(!hasRole('doctor')) {
+if(!hasRole('patient')) {
     header('Location: ../login.php');
     exit();
 }
 
-// Get doctor info
-$stmt = $pdo->prepare("SELECT id FROM doctors WHERE user_id = ?");
+// Get patient info
+$stmt = $pdo->prepare("
+    SELECT p.* 
+    FROM patients p 
+    WHERE p.user_id = ?
+");
 $stmt->execute([$_SESSION['user_id']]);
-$doctor = $stmt->fetch();
+$patient = $stmt->fetch();
 
-// Handle delete
-if(isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM medical_records WHERE id = ? AND doctor_id = ?");
-    $stmt->execute([$_GET['delete'], $doctor['id']]);
-    header('Location: records.php?msg=deleted');
-    exit();
-}
-
-// Get all medical records for this doctor's patients
-$records = $pdo->prepare("
-    SELECT mr.*, p.full_name as patient_name, pat.patient_id
+// Get medical records
+$stmt = $pdo->prepare("
+    SELECT mr.*, d.full_name as doctor_name, doc.specialization
     FROM medical_records mr
-    JOIN patients pat ON mr.patient_id = pat.id
-    JOIN users p ON pat.user_id = p.id
-    WHERE mr.doctor_id = ?
+    LEFT JOIN doctors doc ON mr.doctor_id = doc.id
+    LEFT JOIN users d ON doc.user_id = d.id
+    WHERE mr.patient_id = ?
     ORDER BY mr.record_date DESC
 ");
-$records->execute([$doctor['id']]);
-$records_list = $records->fetchAll();
+$stmt->execute([$patient['id']]);
+$records = $stmt->fetchAll();
 
 function getStatusClass($status) {
     switch($status) {
@@ -56,7 +52,7 @@ function getStatusText($status) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CareClinic - Medical Records</title>
+    <title>CareClinic - My Medical Records</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -178,11 +174,6 @@ function getStatusText($status) {
         .card-header {
             padding: 20px 24px;
             border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
             background: white;
         }
 
@@ -192,38 +183,35 @@ function getStatusText($status) {
             margin: 0;
         }
 
+        .card-title i {
+            margin-right: 8px;
+            color: #5864c7;
+        }
+
         .dataTables_wrapper {
             padding: 20px;
         }
 
-        .table {
-            margin-bottom: 0;
-        }
-
         .table > :not(caption) > * > * {
             padding: 12px 16px;
+            vertical-align: middle;
+        }
+
+        .badge-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
         }
 
         .btn-icon {
-            padding: 6px 10px;
-            margin: 0 3px;
+            padding: 6px 12px;
             border-radius: 8px;
             font-size: 13px;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-        }
-
-        .btn-icon i {
-            font-size: 13px;
-        }
-
-        .badge-status {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
         }
 
         @media (max-width: 900px) {
@@ -235,10 +223,6 @@ function getStatusText($status) {
             .nav { flex-direction: column; align-items: stretch; }
             .menu { justify-content: flex-start; }
             .hero-title { font-size: 38px; margin-top: 34px; }
-            .dataTables_wrapper {
-                padding: 10px;
-                overflow-x: auto;
-            }
         }
     </style>
 </head>
@@ -251,70 +235,61 @@ function getStatusText($status) {
             </div>
 
             <div class="menu">
-                <a href="dashboard.php">Dashboard</a>
-                <a href="patients.php">My Patients</a>
-                <a href="appointments.php">My Appointment</a>
-                <a href="schedule.php">Schedule Availability</a>
-                <a href="records.php" class="active">Medical Records</a>
+                <a href="dashboard.php">Home</a>
+                <a href="book-appointment.php">Book Appointment</a>
+                <a href="index.php">My Appointment</a>
+                <a href="records.php" class="active">My Medical Records</a>
                 <a href="profile.php">Profile</a>
             </div>
 
             <button class="logout-btn" onclick="window.location.href='../logout.php'">Logout</button>
         </nav>
 
-        <h1 class="hero-title">Medical Records</h1>
+        <h1 class="hero-title">My Medical Records</h1>
     </section>
 
     <main class="page">
         <div class="card">
             <div class="card-header">
-                <h2 class="card-title">All Medical Records</h2>
-                <a href="add-record.php" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Add New Record
-                </a>
+                <h2 class="card-title"><i class="fas fa-notes-medical"></i> Medical Records</h2>
             </div>
-            
-            <?php if(isset($_GET['msg'])): ?>
-                <div class="alert alert-success m-3">
-                    <i class="fas fa-check-circle"></i> Record <?php echo htmlspecialchars($_GET['msg']); ?> successfully!
-                </div>
-            <?php endif; ?>
-            
             <div class="table-responsive">
                 <table id="recordsTable" class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Patient</th>
-                            <th>Condition</th>
-                            <th>Record Date</th>
-                            <th>Status</th>
-                            <th>Next Appointment</th>
-                            <th>Actions</th>
+                            <th><i class="fas fa-calendar-alt"></i> Date</th>
+                            <th><i class="fas fa-stethoscope"></i> Condition</th>
+                            <th><i class="fas fa-user-md"></i> Doctor</th>
+                            <th><i class="fas fa-chart-line"></i> Status</th>
+                            <th><i class="fas fa-calendar-check"></i> Next Appointment</th>
+                            <th><i class="fas fa-cog"></i> Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if(count($records_list) > 0): ?>
-                            <?php foreach($records_list as $record): ?>
+                        <?php if(count($records) > 0): ?>
+                            <?php foreach($records as $record): ?>
                             <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars($record['patient_name']); ?></strong><br>
-                                    <small class="text-muted"><?php echo htmlspecialchars($record['patient_id']); ?></small>
-                                </td>
-                                <td><?php echo htmlspecialchars($record['condition_name']); ?></td>
                                 <td><?php echo date('M d, Y', strtotime($record['record_date'])); ?></td>
+                                <td><strong><?php echo htmlspecialchars($record['condition_name']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($record['doctor_name'] ?? 'N/A'); ?><br>
+                                    <small class="text-muted"><?php echo htmlspecialchars($record['specialization'] ?? ''); ?></small>
+                                </td>
                                 <td>
                                     <span class="badge bg-<?php echo getStatusClass($record['status']); ?> badge-status">
+                                        <i class="fas <?php echo $record['status'] == 'stable' ? 'fa-check-circle' : ($record['status'] == 'critical' ? 'fa-exclamation-triangle' : 'fa-chart-line'); ?>"></i>
                                         <?php echo getStatusText($record['status']); ?>
                                     </span>
                                 </td>
                                 <td><?php echo $record['next_appointment_date'] ? date('M d, Y', strtotime($record['next_appointment_date'])) : '<span class="text-muted"><i class="fas fa-minus"></i> No follow-up</span>'; ?></td>
-                                <td>
-                                    <a href="edit-record.php?id=<?php echo $record['id']; ?>" class="btn btn-sm btn-outline-primary btn-icon" title="Edit">
-                                        <i class="fas fa-edit"></i> 
-                                    </a>
-                                    <a href="?delete=<?php echo $record['id']; ?>" onclick="return confirm('Are you sure?')" class="btn btn-sm btn-outline-danger btn-icon" title="Delete">
-                                        <i class="fas fa-trash-alt"></i> 
-                                    </a>
+                                <td class="px-6 py-4">
+                                    <div class="d-flex gap-2">
+                                        <a href="record-detail.php?id=<?php echo $record['id']; ?>" class="btn btn-sm btn-outline-info" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="print-record.php?id=<?php echo $record['id']; ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Report">
+                                            <i class="fas fa-print"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -338,11 +313,11 @@ function getStatusText($status) {
             $('#recordsTable').DataTable({
                 pageLength: 10,
                 lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
-                order: [[3, 'desc']],
+                order: [[0, 'desc']],
                 language: {
                     search: "<i class='fas fa-search'></i> Search:",
                     lengthMenu: "Show _MENU_ entries",
-                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                    info: "Showing _START_ to _END_ of _TOTAL_ records",
                     paginate: {
                         previous: "<i class='fas fa-chevron-left'></i>",
                         next: "<i class='fas fa-chevron-right'></i>"
