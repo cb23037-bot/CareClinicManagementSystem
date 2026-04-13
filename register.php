@@ -27,10 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Username or email already exists!";
         } else {
             // Create user
-            $password_hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role, full_name, phone, address) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $password = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role, full_name, phone, address) VALUES (?, ?, ?, ?, ?, ?, ?)");
             
-            if($stmt->execute([$username, $email, $password_hash, $role, $full_name, $phone, $address])) {
+            if($stmt->execute([$username, $email, $password, $role, $full_name, $phone, $address])) {
                 $user_id = $pdo->lastInsertId();
                 
                 // Create patient profile

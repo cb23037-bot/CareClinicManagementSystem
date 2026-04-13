@@ -29,8 +29,8 @@ $stmt = $pdo->prepare("
     FROM appointments a
     JOIN doctors doc ON a.doctor_id = doc.id
     JOIN users d ON doc.user_id = d.id
-    WHERE a.patient_id = ? AND a.appointment_date >= CURDATE()
-    ORDER BY a.appointment_date ASC LIMIT 5
+    WHERE a.patient_id = ? AND a.app_date >= CURDATE()
+    ORDER BY a.app_date ASC LIMIT 5
 ");
 $stmt->execute([$patient['id']]);
 $upcoming_appointments = $stmt->fetchAll();
@@ -47,20 +47,26 @@ $stmt = $pdo->prepare("
 $stmt->execute([$patient['id']]);
 $recent_records = $stmt->fetchAll();
 
-// Get recent vitals if available
-$stmt = $pdo->prepare("
-    SELECT * FROM vitals 
-    WHERE patient_id = ? 
-    ORDER BY recorded_date DESC LIMIT 1
-");
-$stmt->execute([$patient['id']]);
-$latest_vitals = $stmt->fetch();
-
 // Calculate BMI if height and weight available
 $bmi = null;
+$bmi_category = 'N/A';
 if($patient['height'] && $patient['weight']) {
     $height_m = $patient['height'] / 100;
     $bmi = $patient['weight'] / ($height_m * $height_m);
+    if($bmi < 18.5) $bmi_category = 'Underweight';
+    elseif($bmi < 25) $bmi_category = 'Normal';
+    elseif($bmi < 30) $bmi_category = 'Overweight';
+    else $bmi_category = 'Obese';
+}
+
+function getStatusClass($status) {
+    switch($status) {
+        case 'confirmed': return 'success';
+        case 'completed': return 'info';
+        case 'cancelled': return 'danger';
+        case 'scheduled': return 'warning';
+        default: return 'secondary';
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -69,261 +75,498 @@ if($patient['height'] && $patient['weight']) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CareClinic - Patient Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" type="image/x-icon" href="CareClinicLogo.jpeg">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f0f2f5; }
-        .gradient-bg {
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #ffffff;
+        }
+
+        .hero {
+            background: linear-gradient(rgba(255,255,255,0.58), rgba(255,255,255,0.58)), url('background.jpg') center/cover no-repeat;
+            min-height: 260px;
+            border-bottom-left-radius: 46px;
+            border-bottom-right-radius: 46px;
+            padding: 14px 26px 36px;
+            position: relative;
+        }
+
+        .nav {
+            max-width: 1180px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.62);
+            backdrop-filter: blur(5px);
+            border-radius: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 22px;
+            gap: 18px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 100px;
+        }
+
+        .logo {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+
+        .brand small {
+            display: block;
+            color: #0d6aa8;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .menu {
+            display: flex;
+            align-items: center;
+            gap: 34px;
+            flex-wrap: wrap;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .menu a {
+            text-decoration: none;
+            color: #5864c7;
+            font-size: 14px;
+        }
+
+        .menu a.active {
+            text-decoration: underline;
+            text-underline-offset: 5px;
+        }
+
+        .logout-btn {
+            border: none;
+            background: #5864c7;
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .hero-title {
+            text-align: center;
+            color: rgba(0,0,0,0.75);
+            font-size: 66px;
+            font-style: italic;
+            font-weight: 300;
+            margin: 48px 0 0;
+        }
+
+        .page {
+            max-width: 1280px;
+            margin: -28px auto 60px;
+            padding: 0 18px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-info h3 {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            background: #eaf4ff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #5864c7;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #bdbdbd;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .card-title i {
+            margin-right: 8px;
+            color: #5864c7;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #bdbdbd;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+
+        .action-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        .action-icon {
+            width: 56px;
+            height: 56px;
+            background: #eaf4ff;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 28px;
+            color: #5864c7;
+        }
+
+        .action-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 6px;
+        }
+
+        .action-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .appointment-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #efefef;
+        }
+
+        .appointment-item:last-child {
+            border-bottom: none;
+        }
+
+        .appointment-date {
+            background: #eaf4ff;
+            border-radius: 12px;
+            padding: 10px 15px;
+            text-align: center;
+            min-width: 70px;
+        }
+
+        .appointment-date .month {
+            font-size: 11px;
+            color: #5864c7;
+            font-weight: 600;
+        }
+
+        .appointment-date .day {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .badge-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .health-tip {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 14px;
+            padding: 25px;
+            color: white;
+        }
+
+        @media (max-width: 900px) {
+            .menu { gap: 16px; }
+            .hero-title { font-size: 48px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .quick-actions { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 680px) {
+            .nav { flex-direction: column; align-items: stretch; }
+            .menu { justify-content: flex-start; }
+            .hero-title { font-size: 38px; margin-top: 34px; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .quick-actions { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
-    <nav class="bg-white shadow-lg fixed w-full z-50 top-0">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <img src="../logo.png" alt="Logo" class="h-8 w-8 mr-2">
-                    <span class="font-bold text-xl text-indigo-600">CareClinic Patient Portal</span>
-                </div>
-                <div class="hidden md:flex items-center space-x-8">
-                    <a href="dashboard.php" class="text-indigo-600 border-b-2 border-indigo-600 pb-1">Dashboard</a>
-                    <a href="records.php" class="text-gray-600 hover:text-indigo-600 transition">My Records</a>
-                    <a href="book-appointment.php" class="text-gray-600 hover:text-indigo-600 transition">Book Appointment</a>
-                    <a href="profile.php" class="text-gray-600 hover:text-indigo-600 transition">Profile</a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-700 hidden md:inline">Welcome, <?php echo $_SESSION['full_name']; ?></span>
-                    <a href="../logout.php" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition text-sm">Logout</a>
-                </div>
+    <section class="hero">
+        <nav class="nav">
+            <div class="brand">
+                <img src="CareClinicLogo.jpeg" alt="CareClinic" class="logo">
+                <small>CareClinic</small>
             </div>
-        </div>
-    </nav>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8">
+            <div class="menu">
+                <a href="dashboard.php" class="active">Dashboard</a>
+                <a href="records.php">My Records</a>
+                <a href="book-appointment.php">Book Appointment</a>
+                <a href="profile.php">Profile</a>
+            </div>
+
+            <button class="logout-btn" onclick="window.location.href='../logout.php'">Logout</button>
+        </nav>
+
+        <h1 class="hero-title">Patient Dashboard</h1>
+    </section>
+
+    <main class="page">
         <!-- Welcome Banner -->
-        <div class="gradient-bg rounded-2xl shadow-lg p-8 mb-8 text-white">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+        <div class="health-tip mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                 <div>
-                    <h1 class="text-3xl md:text-4xl font-bold mb-2">Welcome back, <?php echo $_SESSION['full_name']; ?>!</h1>
-                    <p class="text-white/80">We're here to take care of your health. Your next appointment is just a click away.</p>
+                    <h2 class="fs-3 fw-bold mb-2">Welcome back, <?php echo htmlspecialchars($_SESSION['full_name']); ?>!</h2>
+                    <p class="mb-0 opacity-75">We're here to take care of your health. Your health is our priority.</p>
                 </div>
-                <a href="book-appointment.php" class="mt-4 md:mt-0 bg-white text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition shadow-lg">
-                    + Book New Appointment
+                <a href="book-appointment.php" class="btn btn-light text-primary fw-semibold px-4 py-2 rounded-pill">
+                    <i class="fas fa-plus-circle"></i> Book Appointment
                 </a>
             </div>
         </div>
         
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm mb-1">Total Appointments</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $total_appointments; ?></p>
-                    </div>
-                    <div class="bg-indigo-100 p-3 rounded-full">
-                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3><i class="fas fa-calendar-alt"></i> Total Appointments</h3>
+                    <div class="stat-number"><?php echo $total_appointments; ?></div>
                 </div>
+                <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
             </div>
             
-            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm mb-1">Medical Records</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo count($recent_records); ?></p>
-                    </div>
-                    <div class="bg-green-100 p-3 rounded-full">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                    </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3><i class="fas fa-notes-medical"></i> Medical Records</h3>
+                    <div class="stat-number"><?php echo count($recent_records); ?></div>
                 </div>
+                <div class="stat-icon"><i class="fas fa-folder-open"></i></div>
             </div>
             
-            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm mb-1">Upcoming</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo count($upcoming_appointments); ?></p>
-                    </div>
-                    <div class="bg-yellow-100 p-3 rounded-full">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3><i class="fas fa-clock"></i> Upcoming</h3>
+                    <div class="stat-number"><?php echo count($upcoming_appointments); ?></div>
                 </div>
+                <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
             </div>
             
-            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm mb-1">Health Score</p>
-                        <p class="text-3xl font-bold text-gray-800">
-                            <?php 
-                            if($bmi) {
-                                if($bmi < 18.5) echo 'Good';
-                                elseif($bmi < 25) echo 'Excellent';
-                                elseif($bmi < 30) echo 'Fair';
-                                else echo 'Needs Care';
-                            } else {
-                                echo 'N/A';
-                            }
-                            ?>
-                        </p>
-                    </div>
-                    <div class="bg-purple-100 p-3 rounded-full">
-                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                        </svg>
-                    </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3><i class="fas fa-heartbeat"></i> Health Status</h3>
+                    <div class="stat-number" style="font-size: 24px;"><?php echo $bmi_category; ?></div>
                 </div>
+                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
             </div>
         </div>
         
         <!-- Two Column Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div class="row g-4 mb-4">
             <!-- Upcoming Appointments -->
-            <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-gray-800">Upcoming Appointments</h3>
-                    <a href="appointments.php" class="text-sm text-indigo-600 hover:text-indigo-800">View All →</a>
-                </div>
-                <div class="p-6">
-                    <?php if(count($upcoming_appointments) > 0): ?>
-                        <div class="space-y-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-calendar-week"></i> Upcoming Appointments</h3>
+                        <a href="appointments.php" class="btn btn-sm btn-outline-primary">View All <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="p-0">
+                        <?php if(count($upcoming_appointments) > 0): ?>
                             <?php foreach($upcoming_appointments as $apt): ?>
-                            <div class="flex items-start space-x-4 p-3 bg-gray-50 rounded-lg">
-                                <div class="bg-indigo-100 rounded-lg p-3 text-center min-w-[60px]">
-                                    <div class="text-xs text-indigo-600 font-bold"><?php echo date('M', strtotime($apt['appointment_date'])); ?></div>
-                                    <div class="text-xl font-bold text-indigo-700"><?php echo date('d', strtotime($apt['appointment_date'])); ?></div>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-800">Dr. <?php echo $apt['doctor_name']; ?></h4>
-                                    <p class="text-sm text-gray-500"><?php echo $apt['specialization']; ?></p>
-                                    <p class="text-xs text-gray-400 mt-1"><?php echo date('g:i A', strtotime($apt['appointment_time'])); ?></p>
+                            <div class="appointment-item">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="appointment-date">
+                                        <div class="month"><?php echo date('M', strtotime($apt['app_date'])); ?></div>
+                                        <div class="day"><?php echo date('d', strtotime($apt['app_date'])); ?></div>
+                                    </div>
+                                    <div>
+                                        <h5 class="fw-semibold mb-1">nbsp;<?php echo htmlspecialchars($apt['doctor_name']); ?></h5>
+                                        <p class="text-muted small mb-0"><?php echo htmlspecialchars($apt['specialization']); ?></p>
+                                        <p class="text-muted small mt-1"><i class="far fa-clock"></i> <?php echo date('g:i A', strtotime($apt['app_time'])); ?></p>
+                                        <?php if(!empty($apt['app_condition'])): ?>
+                                            <p class="text-muted small mt-1"><i class="fas fa-stethoscope"></i> <strong>Reason:</strong> <?php echo htmlspecialchars(substr($apt['app_condition'], 0, 60)); ?></p>
+                                        <?php endif; ?>                                    
+                                    </div>
                                 </div>
                                 <div>
-                                    <span class="px-2 py-1 rounded-full text-xs font-bold uppercase 
-                                        <?php echo $apt['status'] == 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'; ?>">
-                                        <?php echo $apt['status']; ?>
+                                    <span class="badge bg-<?php echo getStatusClass($apt['status']); ?> badge-status">
+                                        <i class="fas <?php echo $apt['status'] == 'confirmed' ? 'fa-check-circle' : 'fa-clock'; ?>"></i>
+                                        <?php echo ucfirst($apt['status']); ?>
                                     </span>
                                 </div>
                             </div>
                             <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center py-8">
-                            <svg class="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                            <p class="text-gray-500">No upcoming appointments</p>
-                            <a href="book-appointment.php" class="mt-3 inline-block text-indigo-600 hover:text-indigo-800 text-sm">Book one now →</a>
-                        </div>
-                    <?php endif; ?>
+                        <?php else: ?>
+                            <div class="text-center py-5">
+                                <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No upcoming appointments</p>
+                                <a href="book-appointment.php" class="btn btn-sm btn-primary">Book one now <i class="fas fa-arrow-right"></i></a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
             
             <!-- Recent Medical Records -->
-            <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-gray-800">Recent Medical Records</h3>
-                    <a href="records.php" class="text-sm text-indigo-600 hover:text-indigo-800">View All →</a>
-                </div>
-                <div class="p-6">
-                    <?php if(count($recent_records) > 0): ?>
-                        <div class="space-y-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-notes-medical"></i> Recent Medical Records</h3>
+                        <a href="records.php" class="btn btn-sm btn-outline-primary">View All <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="p-0">
+                        <?php if(count($recent_records) > 0): ?>
                             <?php foreach($recent_records as $record): ?>
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div class="flex items-center space-x-3">
-                                    <div class="bg-blue-100 rounded-lg p-2">
-                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                        </svg>
+                            <div class="appointment-item">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                                        <i class="fas fa-file-alt text-primary"></i>
                                     </div>
                                     <div>
-                                        <h4 class="font-semibold text-gray-800"><?php echo $record['condition_name']; ?></h4>
-                                        <p class="text-xs text-gray-500">Dr. <?php echo $record['doctor_name'] ?? 'N/A'; ?> • <?php echo date('M j, Y', strtotime($record['record_date'])); ?></p>
+                                        <h5 class="fw-semibold mb-1"><?php echo htmlspecialchars($record['condition_name']); ?></h5>
+                                        <p class="text-muted small mb-0">
+                                            <i class="fas fa-user-md">&nbsp;</i><?php echo htmlspecialchars($record['doctor_name'] ?? 'N/A'); ?>
+                                        </p>
+                                        <p class="text-muted small mt-1">
+                                            <i class="far fa-calendar-alt"></i> <?php echo date('M j, Y', strtotime($record['record_date'])); ?>
+                                        </p>
                                     </div>
                                 </div>
-                                <div class="flex items-center space-x-2">
+                                <div>
                                     <?php echo getStatusBadge($record['status']); ?>
-                                    <a href="record-detail.php?id=<?php echo $record['id']; ?>" class="text-indigo-600 hover:text-indigo-800 text-sm">View</a>
+                                    <a href="record-detail.php?id=<?php echo $record['id']; ?>" class="btn btn-sm btn-outline-primary ms-2">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
                                 </div>
                             </div>
                             <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center py-8">
-                            <svg class="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            <p class="text-gray-500">No medical records yet</p>
-                        </div>
-                    <?php endif; ?>
+                        <?php else: ?>
+                            <div class="text-center py-5">
+                                <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No medical records yet</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- Quick Actions Row -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <a href="book-appointment.php" class="bg-white rounded-xl shadow-md p-4 text-center hover:shadow-lg transition group">
-                <div class="bg-indigo-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-indigo-200 transition">
-                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                </div>
-                <p class="font-semibold text-gray-700 text-sm">Book Appointment</p>
+        <div class="quick-actions">
+            <a href="book-appointment.php" class="action-card">
+                <div class="action-icon"><i class="fas fa-plus-circle"></i></div>
+                <div class="action-title">Book Appointment</div>
+                <div class="action-desc">Schedule a new visit</div>
             </a>
             
-            <a href="records.php" class="bg-white rounded-xl shadow-md p-4 text-center hover:shadow-lg transition group">
-                <div class="bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-green-200 transition">
-                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                </div>
-                <p class="font-semibold text-gray-700 text-sm">Medical Records</p>
+            <a href="records.php" class="action-card">
+                <div class="action-icon"><i class="fas fa-notes-medical"></i></div>
+                <div class="action-title">Medical Records</div>
+                <div class="action-desc">View your health history</div>
             </a>
             
-            <a href="prescriptions.php" class="bg-white rounded-xl shadow-md p-4 text-center hover:shadow-lg transition group">
-                <div class="bg-yellow-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-yellow-200 transition">
-                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                    </svg>
-                </div>
-                <p class="font-semibold text-gray-700 text-sm">Prescriptions</p>
+            <a href="prescriptions.php" class="action-card">
+                <div class="action-icon"><i class="fas fa-prescription-bottle"></i></div>
+                <div class="action-title">Prescriptions</div>
+                <div class="action-desc">View your medications</div>
             </a>
             
-            <a href="profile.php" class="bg-white rounded-xl shadow-md p-4 text-center hover:shadow-lg transition group">
-                <div class="bg-purple-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-200 transition">
-                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                    </svg>
-                </div>
-                <p class="font-semibold text-gray-700 text-sm">My Profile</p>
+            <a href="profile.php" class="action-card">
+                <div class="action-icon"><i class="fas fa-user-circle"></i></div>
+                <div class="action-title">My Profile</div>
+                <div class="action-desc">Update personal info</div>
             </a>
         </div>
         
-        <!-- Health Tips Section -->
-        <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
-            <div class="flex items-start space-x-4">
-                <div class="bg-white/20 rounded-full p-3">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
+        <!-- Health Tip -->
+        <div class="health-tip">
+            <div class="d-flex align-items-start gap-3">
+                <div class="bg-white bg-opacity-20 rounded-circle p-3">
+                    <i class="fas fa-lightbulb fa-2x"></i>
                 </div>
-                <div class="flex-1">
-                    <h3 class="text-xl font-bold mb-2">Health Tip of the Day</h3>
-                    <p class="text-white/90">Stay hydrated! Drink at least 8 glasses of water daily to maintain optimal health and energy levels.</p>
+                <div class="flex-grow-1">
+                    <h4 class="fw-bold mb-2"><i class="fas fa-heart me-2"></i> Health Tip of the Day</h4>
+                    <p class="mb-0 opacity-90">Stay hydrated! Drink at least 8 glasses of water daily to maintain optimal health and energy levels. Regular exercise and balanced diet are key to a healthy lifestyle.</p>
                 </div>
-                <div class="text-right">
-                    <p class="text-sm text-white/80"><?php echo date('l, F j, Y'); ?></p>
+                <div class="text-end">
+                    <p class="small opacity-75 mb-0"><i class="far fa-calendar-alt"></i> <?php echo date('l, F j, Y'); ?></p>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </body>
 </html>

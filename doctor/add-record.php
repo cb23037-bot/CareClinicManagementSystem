@@ -19,6 +19,8 @@ $patients = $pdo->query("
     ORDER BY u.full_name
 ")->fetchAll();
 
+$selected_patient = isset($_GET['patient_id']) ? $_GET['patient_id'] : '';
+
 if($_SERVER['REQUEST_METHOD'] === 'POST') {
     $patient_id = $_POST['patient_id'];
     $condition_name = sanitizeInput($_POST['condition_name']);
@@ -29,14 +31,28 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     $record_date = $_POST['record_date'];
     $next_appointment_date = $_POST['next_appointment_date'] ?: null;
     
+    // Vitals fields (only these are in medical_records table)
+    $blood_pressure = sanitizeInput($_POST['blood_pressure'] ?? null);
+    $heart_rate = sanitizeInput($_POST['heart_rate'] ?? null);
+    $temperature = sanitizeInput($_POST['temperature'] ?? null);
+    $respiratory_rate = sanitizeInput($_POST['respiratory_rate'] ?? null);
+    $oxygen_saturation = sanitizeInput($_POST['oxygen_saturation'] ?? null);
+    
     $record_id = generateUniqueId('REC');
     
     $stmt = $pdo->prepare("
-        INSERT INTO medical_records (record_id, patient_id, doctor_id, condition_name, status, diagnosis, prescription, notes, record_date, next_appointment_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO medical_records (
+            record_id, patient_id, doctor_id, condition_name, status, 
+            diagnosis, prescription, notes, record_date, next_appointment_date,
+            blood_pressure, heart_rate, temperature, respiratory_rate, oxygen_saturation
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     
-    if($stmt->execute([$record_id, $patient_id, $doctor['id'], $condition_name, $status, $diagnosis, $prescription, $notes, $record_date, $next_appointment_date])) {
+    if($stmt->execute([
+        $record_id, $patient_id, $doctor['id'], $condition_name, $status,
+        $diagnosis, $prescription, $notes, $record_date, $next_appointment_date,
+        $blood_pressure, $heart_rate, $temperature, $respiratory_rate, $oxygen_saturation
+    ])) {
         header('Location: records.php?msg=added');
         exit();
     }
@@ -48,93 +64,192 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CareClinic - Add Medical Record</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" type="image/x-icon" href="CareClinicLogo.jpeg">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; background: #ffffff; }
+        .hero {
+            background: linear-gradient(rgba(255,255,255,0.58), rgba(255,255,255,0.58)), url('background.jpg') center/cover no-repeat;
+            min-height: 200px;
+            border-bottom-left-radius: 46px;
+            border-bottom-right-radius: 46px;
+            padding: 14px 26px 30px;
+        }
+        .nav {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.62);
+            backdrop-filter: blur(5px);
+            border-radius: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 22px;
+            gap: 18px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .logo { width: 44px; height: 44px; object-fit: contain; }
+        .brand small { color: #0d6aa8; font-weight: 700; font-size: 18px; }
+        .menu { display: flex; align-items: center; gap: 34px; flex-wrap: wrap; justify-content: center; flex: 1; }
+        .menu a { text-decoration: none; color: #5864c7; font-size: 14px; }
+        .menu a.active { text-decoration: underline; text-underline-offset: 5px; }
+        .logout-btn { border: none; background: #5864c7; color: #fff; padding: 8px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+        .hero-title { text-align: center; color: rgba(0,0,0,0.75); font-size: 42px; font-style: italic; font-weight: 300; margin: 30px 0 0; }
+        .page { max-width: 1000px; margin: -28px auto 60px; padding: 0 18px; position: relative; z-index: 2; }
+        .card { background: white; border: 1px solid #bdbdbd; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); border-radius: 14px; overflow: hidden; padding: 30px; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #5864c7; text-decoration: none; }
+        .form-section { background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 25px; }
+        .form-section-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb; }
+        .form-section-title i { margin-right: 8px; color: #5864c7; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #1f2937; }
+        .required { color: #e74c3c; }
+        input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #5864c7; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .vitals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; }
+        .btn-submit { background: #5864c7; color: white; padding: 12px 24px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; width: 100%; }
+        .btn-cancel { background: #9ca3af; color: white; padding: 12px 24px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
+        .button-group { display: flex; gap: 15px; margin-top: 30px; }
+        @media (max-width: 768px) { .form-row, .vitals-grid { grid-template-columns: 1fr; } .menu { gap: 16px; } .nav { flex-direction: column; } .hero-title { font-size: 32px; } }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-white shadow-lg fixed w-full z-50 top-0">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="dashboard.php" class="flex items-center">
-                        <img src="../logo.png" alt="Logo" class="h-8 w-8 mr-2">
-                        <span class="font-bold text-xl text-indigo-600">CareClinic Doctor</span>
-                    </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-700"><?php echo $_SESSION['full_name']; ?></span>
-                    <a href="../logout.php" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">Logout</a>
-                </div>
+<body>
+    <section class="hero">
+        <nav class="nav">
+            <div class="brand">
+                <img src="CareClinicLogo.jpeg" alt="CareClinic" class="logo" >
+                <small>CareClinic</small>
             </div>
-        </div>
-    </nav>
+            <div class="menu">
+                <a href="dashboard.php">Dashboard</a>
+                <a href="patients.php">My Patients</a>
+                <a href="appointments.php">My Appointments</a>
+                <a href="schedule.php">Schedule Availability</a>
+                <a href="records.php" class="active">Medical Records</a>
+                <a href="profile.php">Profile</a>
+            </div>
+            <button class="logout-btn" onclick="window.location.href='../logout.php'">Logout</button>
+        </nav>
+        <h1 class="hero-title">Add Medical Record</h1>
+    </section>
 
-    <div class="max-w-4xl mx-auto px-4 pt-20 pb-8">
-        <div class="mb-8">
-            <a href="records.php" class="text-indigo-600 hover:text-indigo-800 mb-2 inline-block">&larr; Back to Records</a>
-            <h1 class="text-3xl font-bold text-gray-800">Add New Medical Record</h1>
-        </div>
-        
-        <div class="bg-white rounded-xl shadow-md p-8">
+    <main class="page">
+        <div class="card">
+            <a href="records.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Records</a>
+            
             <form method="POST">
-                <div class="grid grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Patient *</label>
-                        <select name="patient_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select Patient</option>
-                            <?php foreach($patients as $patient): ?>
-                            <option value="<?php echo $patient['id']; ?>"><?php echo $patient['full_name']; ?> (<?php echo $patient['patient_id']; ?>)</option>
-                            <?php endforeach; ?>
-                        </select>
+                <!-- Patient Information -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-user"></i> Patient Information</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Patient <span class="required">*</span></label>
+                            <select name="patient_id" required>
+                                <option value="">Select Patient</option>
+                                <?php foreach($patients as $patient): ?>
+                                <option value="<?php echo $patient['id']; ?>" <?php echo $selected_patient == $patient['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($patient['full_name']); ?> (<?php echo $patient['patient_id']; ?>)
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Record Date <span class="required">*</span></label>
+                            <input type="date" name="record_date" value="<?php echo date('Y-m-d'); ?>" required>
+                        </div>
                     </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Condition *</label>
-                        <input type="text" name="condition_name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Vital Signs -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-heartbeat"></i> Vital Signs</div>
+                    <div class="vitals-grid">
+                        <div class="form-group">
+                            <label><i class="fas fa-tachometer-alt"></i> Blood Pressure (mmHg)</label>
+                            <input type="text" name="blood_pressure" placeholder="e.g., 120/80">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-heart"></i> Heart Rate (bpm)</label>
+                            <input type="number" name="heart_rate" placeholder="60-100">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-thermometer-half"></i> Temperature (°C)</label>
+                            <input type="text" name="temperature" step="0.1" placeholder="36.5 - 37.2">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-lungs"></i> Respiratory Rate (/min)</label>
+                            <input type="number" name="respiratory_rate" placeholder="12-20">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-percent"></i> Oxygen Saturation (%)</label>
+                            <input type="number" name="oxygen_saturation" placeholder="95-100" min="0" max="100">
+                        </div>
                     </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                        <select name="status" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="stable">Stable</option>
-                            <option value="recovering">Recovering</option>
-                            <option value="under_observation">Under Observation</option>
-                            <option value="critical">Critical</option>
-                        </select>
+                </div>
+
+                <!-- Diagnosis -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-stethoscope"></i> Diagnosis & Condition</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Condition <span class="required">*</span></label>
+                            <input type="text" name="condition_name" required placeholder="e.g., Hypertension, Diabetes">
+                        </div>
+                        <div class="form-group">
+                            <label>Status <span class="required">*</span></label>
+                            <select name="status" required>
+                                <option value="stable">Stable</option>
+                                <option value="recovering">Recovering</option>
+                                <option value="under_observation">Under Observation</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
                     </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Record Date *</label>
-                        <input type="date" name="record_date" value="<?php echo date('Y-m-d'); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <div class="form-group">
+                        <label>Diagnosis</label>
+                        <textarea name="diagnosis" rows="3" placeholder="Enter detailed diagnosis..."></textarea>
                     </div>
-                    
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
-                        <textarea name="diagnosis" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <!-- Prescription -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-prescription-bottle"></i> Prescription</div>
+                    <div class="form-group">
+                        <textarea name="prescription" rows="4" placeholder="Enter medication details:
+- Drug name, dosage, frequency
+- Duration of treatment
+- Special instructions"></textarea>
                     </div>
-                    
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Prescription</label>
-                        <textarea name="prescription" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <!-- Follow-up -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-calendar-check"></i> Follow-up Schedule</div>
+                    <div class="form-group">
+                        <label>Next Appointment Date</label>
+                        <input type="date" name="next_appointment_date" min="<?php echo date('Y-m-d'); ?>">
+                        <small class="text-muted">Leave empty if no follow-up needed</small>
                     </div>
-                    
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
-                        <textarea name="notes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Next Appointment Date</label>
-                        <input type="date" name="next_appointment_date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Additional Notes -->
+                <div class="form-section">
+                    <div class="form-section-title"><i class="fas fa-pencil-alt"></i> Additional Notes</div>
+                    <div class="form-group">
+                        <textarea name="notes" rows="3" placeholder="Any additional notes or observations..."></textarea>
                     </div>
                 </div>
                 
-                <div class="flex justify-end space-x-3 mt-8">
-                    <a href="records.php" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">Cancel</a>
-                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Save Record</button>
+                <div class="button-group">
+                    <a href="records.php" class="btn-cancel" style="flex: 1;">Cancel</a>
+                    <button type="submit" class="btn-submit" style="flex: 1;"><i class="fas fa-save"></i> Save Record</button>
                 </div>
             </form>
         </div>
-    </div>
+    </main>
 </body>
 </html>

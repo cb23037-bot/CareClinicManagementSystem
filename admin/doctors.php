@@ -29,12 +29,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             $experience_years = (int)$_POST['experience_years'];
             $consultation_fee = (float)$_POST['consultation_fee'];
             
-            // Check if username exists
             $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
             $stmt->execute([$username]);
             if(!$stmt->fetch()) {
-                // Insert user
-                $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role, full_name, phone, address) VALUES (?, ?, ?, 'doctor', ?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role, full_name, phone, address) VALUES (?, ?, ?, 'doctor', ?, ?, ?)");
                 if($stmt->execute([$username, $email, $password, $full_name, $phone, $address])) {
                     $user_id = $pdo->lastInsertId();
                     $doctor_id = generateUniqueId('DOC');
@@ -66,7 +64,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get all doctors
 $doctors = $pdo->query("
     SELECT u.*, d.* 
     FROM users u 
@@ -81,65 +78,110 @@ $doctors = $pdo->query("
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CareClinic - Manage Doctors</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <link rel="icon" type="image/x-icon" href="CareClinicLogo.jpeg">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; background: #ffffff; }
+        .hero {
+            background: linear-gradient(rgba(255,255,255,0.58), rgba(255,255,255,0.58)), url('background.jpg') center/cover no-repeat;
+            min-height: 220px;
+            border-bottom-left-radius: 46px;
+            border-bottom-right-radius: 46px;
+            padding: 14px 26px 30px;
+        }
+        .nav {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.62);
+            backdrop-filter: blur(5px);
+            border-radius: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 22px;
+            gap: 18px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .logo { width: 44px; height: 44px; object-fit: contain; }
+        .brand small { color: #0d6aa8; font-weight: 700; font-size: 18px; }
+        .menu { display: flex; align-items: center; gap: 34px; flex-wrap: wrap; justify-content: center; flex: 1; }
+        .menu a { text-decoration: none; color: #5864c7; font-size: 14px; }
+        .menu a.active { text-decoration: underline; text-underline-offset: 5px; }
+        .logout-btn { border: none; background: #5864c7; color: #fff; padding: 8px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+        .hero-title { text-align: center; color: rgba(0,0,0,0.75); font-size: 48px; font-style: italic; font-weight: 300; margin: 30px 0 0; }
+        .page { max-width: 1280px; margin: -28px auto 60px; padding: 0 18px; position: relative; z-index: 2; }
+        .card { background: white; border: 1px solid #bdbdbd; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); border-radius: 14px; overflow: hidden; }
+        .card-header { padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: white; }
+        .card-title { font-size: 20px; font-weight: 600; margin: 0; }
+        .card-title i { margin-right: 8px; color: #5864c7; }
+        .btn-primary-custom { background: #5864c7; color: white; padding: 8px 20px; border-radius: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; border: none; }
+        .btn-primary-custom:hover { background: #3f5efb; }
+        .dataTables_wrapper { padding: 20px; }
+        .table > :not(caption) > * > * { padding: 12px 16px; vertical-align: middle; }
+        .alert-success { background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 10px; margin: 20px; }
+        .modal-content { border-radius: 14px; }
+        @media (max-width: 900px) { .menu { gap: 16px; } .hero-title { font-size: 36px; } }
+        @media (max-width: 680px) { .nav { flex-direction: column; align-items: stretch; } .menu { justify-content: flex-start; } .hero-title { font-size: 28px; margin-top: 34px; } }
+    </style>
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-white shadow-lg fixed w-full z-50 top-0">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="dashboard.php" class="flex items-center">
-                        <img src="../logo.png" alt="Logo" class="h-8 w-8 mr-2">
-                        <span class="font-bold text-xl text-indigo-600">CareClinic Admin</span>
-                    </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-700">Welcome, <?php echo $_SESSION['full_name']; ?></span>
-                    <a href="../logout.php" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">Logout</a>
-                </div>
+<body>
+    <section class="hero">
+        <nav class="nav">
+            <div class="brand">
+                <img src="CareClinicLogo.jpeg" alt="CareClinic" class="logo" >
+                <small>CareClinic</small>
             </div>
-        </div>
-    </nav>
+            <div class="menu">
+                <a href="dashboard.php">Dashboard</a>
+                <a href="patients.php">Patients</a>
+                <a href="doctors.php" class="active">Doctors</a>
+                <a href="appointments.php">Appointments</a>
+                <a href="records.php">Records</a>
+            </div>
+            <button class="logout-btn" onclick="window.location.href='../logout.php'">Logout</button>
+        </nav>
+        <h1 class="hero-title">Manage Doctors</h1>
+    </section>
 
-    <div class="max-w-7xl mx-auto px-4 pt-20 pb-8">
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold text-gray-800">Manage Doctors</h1>
-            <button onclick="openAddModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">
-                + Add New Doctor
-            </button>
-        </div>
-        
-        <?php if(isset($_GET['msg'])): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                Doctor <?php echo $_GET['msg']; ?> successfully!
+    <main class="page">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title"><i class="fas fa-user-md"></i> Doctor List</h2>
+                <button onclick="openAddModal()" class="btn-primary-custom"><i class="fas fa-plus"></i> Add New Doctor</button>
             </div>
-        <?php endif; ?>
-        
-        <div class="bg-white rounded-xl shadow-md overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
+            
+            <?php if(isset($_GET['msg'])): ?>
+                <div class="alert-success"><i class="fas fa-check-circle"></i> Doctor <?php echo $_GET['msg']; ?> successfully!</div>
+            <?php endif; ?>
+            
+            <div class="table-responsive">
+                <table id="doctorsTable" class="table table-hover">
+                    <thead>
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Doctor ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Specialization</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Experience</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fee</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <th>Doctor ID</th>
+                            <th>Name</th>
+                            <th>Specialization</th>
+                            <th>Experience</th>
+                            <th>Fee</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200">
+                    <tbody>
                         <?php foreach($doctors as $doctor): ?>
                         <tr>
-                            <td class="px-6 py-4"><?php echo $doctor['doctor_id']; ?></td>
-                            <td class="px-6 py-4 font-medium text-gray-900">Dr. <?php echo $doctor['full_name']; ?></td>
-                            <td class="px-6 py-4"><?php echo $doctor['specialization']; ?></td>
-                            <td class="px-6 py-4"><?php echo $doctor['experience_years']; ?> years</td>
-                            <td class="px-6 py-4">RM <?php echo number_format($doctor['consultation_fee'], 2); ?></td>
-                            <td class="px-6 py-4">
-                                <button onclick="editDoctor(<?php echo htmlspecialchars(json_encode($doctor)); ?>)" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
-                                <a href="?delete=<?php echo $doctor['user_id']; ?>" onclick="return confirm('Are you sure?')" class="text-red-600 hover:text-red-900">Delete</a>
+                            <td><?php echo htmlspecialchars($doctor['doctor_id']); ?></td>
+                            <td><strong><?php echo htmlspecialchars($doctor['full_name']); ?></strong></td>
+                            <td><?php echo htmlspecialchars($doctor['specialization']); ?></td>
+                            <td><?php echo $doctor['experience_years']; ?> years</td>
+                            <td>RM <?php echo number_format($doctor['consultation_fee'], 2); ?></td>
+                            <td>
+                                <button onclick='editDoctor(<?php echo json_encode($doctor); ?>)' class="btn btn-sm btn-outline-primary" title="Edit"><i class="fas fa-edit"></i> Edit</button>
+                                <a href="?delete=<?php echo $doctor['user_id']; ?>" onclick="return confirm('Are you sure?')" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash-alt"></i> Delete</a>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -147,89 +189,72 @@ $doctors = $pdo->query("
                 </table>
             </div>
         </div>
-    </div>
+    </main>
 
-    <!-- Add/Edit Modal -->
-    <div id="doctorModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modalTitle" class="text-xl font-bold text-gray-800">Add New Doctor</h3>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
+    <!-- Modal -->
+    <div class="modal fade" id="doctorModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle"><i class="fas fa-user-md"></i> Add New Doctor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" id="action" name="action">
+                        <input type="hidden" id="user_id" name="user_id">
+                        <div class="row g-3">
+                            <div class="col-md-6"><label class="form-label">Full Name *</label><input type="text" id="full_name" name="full_name" required class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Email *</label><input type="email" id="email" name="email" required class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Username *</label><input type="text" id="username" name="username" required class="form-control"></div>
+                            <div class="col-md-6" id="passwordDiv"><label class="form-label">Password *</label><input type="password" id="password" name="password" class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Phone</label><input type="text" id="phone" name="phone" class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Address</label><input type="text" id="address" name="address" class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Specialization *</label><input type="text" id="specialization" name="specialization" required class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Qualification *</label><input type="text" id="qualification" name="qualification" required class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Experience (Years) *</label><input type="number" id="experience_years" name="experience_years" required class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Consultation Fee (RM) *</label><input type="number" step="0.01" id="consultation_fee" name="consultation_fee" required class="form-control"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Doctor</button>
+                    </div>
+                </form>
             </div>
-            <form method="POST">
-                <input type="hidden" id="action" name="action">
-                <input type="hidden" id="user_id" name="user_id">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Full Name *</label>
-                        <input type="text" id="full_name" name="full_name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Email *</label>
-                        <input type="email" id="email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Username *</label>
-                        <input type="text" id="username" name="username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div id="passwordDiv">
-                        <label class="block text-sm font-medium text-gray-700">Password *</label>
-                        <input type="password" id="password" name="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Phone</label>
-                        <input type="text" id="phone" name="phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Address</label>
-                        <input type="text" id="address" name="address" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Specialization *</label>
-                        <input type="text" id="specialization" name="specialization" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Qualification *</label>
-                        <input type="text" id="qualification" name="qualification" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Experience (Years) *</label>
-                        <input type="number" id="experience_years" name="experience_years" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Consultation Fee (RM) *</label>
-                        <input type="number" step="0.01" id="consultation_fee" name="consultation_fee" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                    </div>
-                </div>
-                <div class="flex justify-end space-x-3 mt-6">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Save</button>
-                </div>
-            </form>
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script>
+        $(document).ready(function() {
+            $('#doctorsTable').DataTable({
+                pageLength: 10,
+                language: {
+                    search: "<i class='fas fa-search'></i> Search:",
+                    lengthMenu: "Show _MENU_ entries",
+                    paginate: { previous: "<i class='fas fa-chevron-left'></i>", next: "<i class='fas fa-chevron-right'></i>" }
+                }
+            });
+        });
+        
+        let doctorModal = new bootstrap.Modal(document.getElementById('doctorModal'));
+        
         function openAddModal() {
-            document.getElementById('modalTitle').innerText = 'Add New Doctor';
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-md"></i> Add New Doctor';
             document.getElementById('action').value = 'add';
             document.getElementById('user_id').value = '';
             document.getElementById('passwordDiv').style.display = 'block';
             document.getElementById('password').required = true;
-            document.getElementById('full_name').value = '';
-            document.getElementById('email').value = '';
-            document.getElementById('username').value = '';
-            document.getElementById('phone').value = '';
-            document.getElementById('address').value = '';
-            document.getElementById('specialization').value = '';
-            document.getElementById('qualification').value = '';
-            document.getElementById('experience_years').value = '';
-            document.getElementById('consultation_fee').value = '';
-            document.getElementById('doctorModal').classList.remove('hidden');
+            document.querySelector('form').reset();
+            doctorModal.show();
         }
         
         function editDoctor(doctor) {
-            document.getElementById('modalTitle').innerText = 'Edit Doctor';
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Doctor';
             document.getElementById('action').value = 'edit';
             document.getElementById('user_id').value = doctor.user_id;
             document.getElementById('passwordDiv').style.display = 'none';
@@ -243,11 +268,7 @@ $doctors = $pdo->query("
             document.getElementById('qualification').value = doctor.qualification;
             document.getElementById('experience_years').value = doctor.experience_years;
             document.getElementById('consultation_fee').value = doctor.consultation_fee;
-            document.getElementById('doctorModal').classList.remove('hidden');
-        }
-        
-        function closeModal() {
-            document.getElementById('doctorModal').classList.add('hidden');
+            doctorModal.show();
         }
     </script>
 </body>

@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$username, $role]);
     $user = $stmt->fetch();
     
-    if ($user && password_verify($password, $user['password_hash'])) {
+    if ($user && password_verify($password, $user['password'])) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
@@ -50,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
         <div class="text-center">
-            <img src="logo.png" alt="Logo" class="h-16 w-16 mx-auto">
             <h2 class="mt-4 text-3xl font-extrabold text-gray-900">Welcome Back</h2>
             <p class="mt-2 text-sm text-gray-600">Sign in to your account</p>
         </div>
